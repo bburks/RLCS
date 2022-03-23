@@ -1,5 +1,11 @@
-
 import sys
+import os
+def mkdir(path):
+    try:
+        os.mkdir(path)
+    except:
+        return False
+    return True
 
 def collapse(list):
     new = []
@@ -11,11 +17,11 @@ def collapse(list):
 def transpose(dataList):
     return list(map(list, zip(*dataList)))
 
-
-
-
-
-
+def contains(iterator, elem):
+    for e in iterator:
+        if e == elem:
+            return True
+    return False
 
 if __name__ == '__main__':
 

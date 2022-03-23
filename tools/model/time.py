@@ -20,8 +20,5 @@ class Time:
 
 
 
-
-
-
 t = Time('2020-07-29T18:00:00Z')
 print(t.times)
