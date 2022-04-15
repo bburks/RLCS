@@ -1,436 +1,466 @@
-import math
-from ..data import csv_handler, data_handler
-
-class Format:
-    # subclasses should implement:
-    # _update_match_seeding(self)
-    # _update_result(self)
-    # self.matches or self.get('matches')
-    # self.capacity or self.get('capacity')
+from abc import ABC, abstractmethod
+from random import random
+class Format(ABC):
 
     def __init__(self):
-        self.matches = None
         self.seeding = None
-        self.result = None
-        self.capacity = None
 
-    def get(self, str, **kwargs):
-        if str == 'completed':
-            matches = self.get('matches')
-            for match in matches:
-                match_completed = match.get('completed')
-                if not match_completed:
-                    return False
-            return True
-        elif str == 'ready_matches':
-            self._update_match_seeding()
-            ready_matches = []
-            for match in self.get('matches'):
-                if match.get('ready'):
-                    ready_matches.append(match)
-            return ready_matches
-        elif str == 'seeding':
-            return self.seeding
-        elif str == 'matches':
-            return self.matches
-        elif str == 'result':
-            if self.get('completed') and self.result == None:
-                self._update_result()
-            return self.result
-        elif str == 'seed':
-            team = kwargs['team']
-            for i, t in enumerate(self.get('seeding')):
-                if t == team:
-                    return i
-            return None
-        elif str == 'capacity':
-            return self.capacity
-        else:
-            assert False, f'{str} not recognized'
+    def set_seeding(self, seeding):
+        assert isinstance(seeding, list)
+        assert len(seeding) == self.get_capacity()
 
-    def set(self, **kwargs):
-        for str in kwargs:
-            obj = kwargs[str]
-            if str == 'seeding':
-                assert isinstance(obj, list)
-                self.seeding = obj
-            else:
-                assert False, f'{str} not recognized'
+        self.seeding = seeding
 
-    def save(self, path):
-        data_handler.mkdir(path)
-        matches = []
-        labels = ['blue', 'orange', 'blue_score', 'orange_score']
-        dataList = [[], [], [], []]
-        for match in self.get('matches'):
-            for i, label in enumerate(labels):
-                dataList[i].append(match.get(label))
-        csv_handler.export(labels, dataList, f'{path}/matches')
-        seeding = self.get('seeding')
-        csv_handler.export_line(seeding, f'{path}/seeding')
+    def is_seeded(self):
+        if self.seeding == None:
+            return False
+        return True
 
-    @classmethod
-    def load(cls, path):
-        [labels, dataList] = csv_handler.extract(f'{path}/matches')
-        seeding = csv_handler.extract_line(f'{path}/seeding')
-        seeding = [int(seed) for seed in seeding]
-        funcs = [Team, Team, lambda x : x, lambda x : x]
-        loaded = cls()
+    def get_seeding(self):
+        return self.seeding
 
-        for func, label, data in zip(funcs, labels, dataList):
-            for match, datum in zip(loaded.get('matches'), data):
-                if datum == '':
-                    continue
+    def __iter__(self):
+        return self
+
+    def fill(self, mode = 0):
+        teams = [Team(id = i + 1, name = str(i + 1)) for i in range(self.get_capacity())]
+        self.set_seeding(teams)
+        for game in self:
+            if mode == 0:
+                game.set_winner(game.get_blue())
+            elif mode == 1:
+                game.set_winner(game.get_orange())
+            elif mode == 2:
+                if random() < 0.5:
+                    game.set_winner(game.get_blue())
                 else:
-                    datum = func(int(datum))
+                    game.set_winner(game.get_orange())
+            else:
+                assert False
 
-                kwargs = dict()
-                kwargs[label] = datum
-
-                match.set(**kwargs)
-        loaded.set(seeding = seeding)
-        return loaded
+    
 
 
-    def _update_match_seeding(self):
-        assert False, 'this function should be overridden'
-
-    def _update_result(self):
-        assert False, 'this function should be overridden'
 
 
+    @abstractmethod
+    def is_completed(self):
+        pass
+
+    @abstractmethod
+    def get_capacity(self):
+        pass
+
+    @abstractmethod
+    def get_result(self):
+        pass
+
+    @abstractmethod
+    def __next__(self):
+        pass
+
+    @abstractmethod
     def __repr__(self):
-        return self.get('matches').__repr__()
+        pass
 
-    def __eq__(self, other):
-        if not isinstance(other, Format):
-            return False
-        for m1, m2 in zip(self.get('matches'), other.get('matches')):
-            if m1 != m2:
-                return False
-        return True
-
-class Match:
+class Game:
     def __init__(self):
-        self.orange_team = None
-        self.blue_team = None
-        self.blue_score = None
-        self.orange_score = None
-        self.date = None
+        self.blue = None
+        self.orange = None
+        self.winner = None
 
-    def get(self, str):
+    def get_blue(self):
+        return self.blue
 
-        if str == 'blue':
-            return self.blue_team
-        elif str == 'orange':
-            return self.orange_team
-        elif str == 'blue_score':
-            return self.blue_score
-        elif str == 'orange_score':
-            return self.orange_score
+    def get_orange(self):
+        return self.orange
 
-        elif str == 'winner':
-            if not self.get('completed'):
-                return None
-            if self.get('blue_score') > self.get('orange_score'):
-                return self.get('blue')
-            else:
-                return self.get('orange')
-        elif str == 'loser':
-            if not self.get('completed'):
-                return None
-            if self.get('blue_score') > self.get('orange_score'):
-                return self.get('orange')
-            else:
-                return self.get('blue')
+    def get_winner(self):
+        return self.winner
 
-        elif str == 'score':
-            return (self.get('blue_score'), self.get('orange_score'))
-
-        elif str == 'seeded':
-            if self.orange_team == None or self.blue_team == None:
-                return False
-            return True
-        elif str == 'completed':
-            if self.orange_score == None or self.blue_score == None:
-                return False
-            return True
-        elif str == 'ready':
-            if self.get('completed'):
-                return False
-            if self.get('seeded'):
-                return True
+    def is_completed(self):
+        if self.winner == None:
             return False
-
-        elif str == 'date':
-            return self.date
-
         else:
-            assert False, f'{str} not recognized'
+            return True
 
-    def set(self, **kwargs):
-        for str in kwargs:
-            obj = kwargs[str]
-            if str == 'blue':
-                assert isinstance(obj, Team), 'assigned team must be a team object'
-                self.blue_team = obj
-            elif str == 'orange':
-                assert  isinstance(obj, Team), 'assigned team must be a team object'
-                self.orange_team = obj
-            elif str == 'score':
-
-                assert  isinstance(obj, tuple), 'score must be a tuple'
-                assert obj[0] != obj[1], 'match cannot en in a tie'
-                self.set(blue_score = obj[0])
-                self.set(orange_score = obj[1])
-            elif str == 'blue_score':
-
-                self.blue_score = int(obj)
-            elif str == 'orange_score':
-
-                self.orange_score = int(obj)
-            elif str == 'date':
-                self.date = obj
-            else:
-                assert False, f'{str} not recognized'
-
-    def __repr__(self):
-        if self.get('ready'):
-            return f"{self.get('blue')} vs {self.get('orange')}"
-        if self.get('completed'):
-            return f"{self.get('blue')} vs {self.get('orange')} | {self.get('score')}"
-        else:
-            return f"None vs None"
-
-    def __eq__(self, other):
-        if not isinstance(other, Match):
+    def is_seeded(self):
+        if self.get_blue() == None:
             return False
-        for label in ['orange', 'blue', 'orange_score', 'blue_score']:
-            if self.get(label) != other.get(label):
-                return False
+        if self.get_orange() == None:
+            return False
         return True
 
-class Team:
-
-    def __init__(self, id):
-        self.id = id
-        self.name = None
-
-    def get(self, str):
-        if str == 'id':
-            return self.id
-        if str == 'name':
-            return self.name
-        if str == 'region':
-            return self.region
-
-    def set(self, **kwargs):
-        for key in kwargs:
-            obj = kwargs[key]
-            if key == "name":
-                self.name = obj
-            if key == 'region':
-                self.region = obj
-
-    def __hash__(self):
-        return self.id.__hash__()
-
-    def __eq__(self, other):
-        if isinstance(other, Team):
-            if self.id == other.id:
-                return True
+    def is_ready(self):
+        if self.is_completed():
+            return False
+        if self.is_seeded():
+            return True
         return False
 
+    def set_blue(self, team):
+        self.blue = team
+
+    def set_orange(self, team):
+        self.orange = team
+
+    def set_winner(self, team):
+        assert team == self.get_orange() or team == self.get_blue()
+        self.winner = team
+
     def __repr__(self):
-        return f'{self.id}'
+        return f'{self.get_blue()} vs {self.get_orange()} | winner: {self.get_winner()}'
 
-class First_To(Match):
-    def __init__(self, win_goal = 3):
+class Team:
+    def __init__(self, id = None, name = None, region = None):
+        self.id = id
+        self.name = name
+        self.region = region
+
+    def get_name(self):
+        return self.name
+    def get_id(self):
+        return self.id
+    def get_region(self):
+        return self.region
+
+    def set_id(self, id):
+        self.id = id
+    def set_name(self, name):
+        self.name = name
+    def set_region(self, region):
+        self.region = region
+
+    def __hash__(self):
+        return self.get_id().__hash__()
+    def __eq__(self, other):
+        if isinstance(other, Team):
+            if self.get_id() == other.get_id():
+                return True
+        return False
+    def __repr__(self):
+        return f'{self.get_name()}'
+
+
+
+class Best_Of(Format):
+    def __init__(self, max_game_count):
         super().__init__()
-        self.win_goal = win_goal
+        assert isinstance(max_game_count, int)
+        assert max_game_count > 0
+        assert max_game_count < 100
+        assert max_game_count % 2 == 1
+        self.win_goal = (max_game_count + 1) / 2
+        self.games = []
 
-    def set(self, **kwargs):
-        for str in kwargs:
-            obj = kwargs[str]
-            if str == 'orange_score':
-                assert obj <= self.win_goal
-                blue_score = self.get('blue_score')
-                if blue_score != None:
-                    assert max(blue_score, obj) == self.win_goal
-            elif str == 'blue_score':
-                assert obj <= self.win_goal
-                orange_score = self.get('orange_score')
-                if orange_score != None:
-                    assert max(orange_score, obj) == self.win_goal
-
-
-        super().set(**kwargs)
-
-    def get(self, str):
-        if str == 'win_goal':
-            return self.win_goal
-        else:
-            return super().get(str)
-
-class Join(Format):
-    def __init__(self, F1, F2):
-        super().__init__()
-        self.F1 = F1
-        self.F2 = F2
-
-
-
-    def get(self, str, **kwargs):
-
-        if str == 'seeding':
-            return self.F1.get('seeding')
-        elif str == 'matches':
-            matches = []
-            for event in [self.F1, self.F2]:
-                matches.extend(event.get('matches'))
-            return matches
-        elif str == 'capacity':
-            return self.F1.get('capacity')
-        else:
-            return super().get(str, **kwargs)
-
-    def set(self, **kwargs):
-        for str in kwargs:
-            obj = kwargs[str]
-            if str == 'seeding':
-                self.F1.set(seeding = obj)
+    def _get_status(self):
+        if not self.is_seeded():
+            return 0
+        blue_count = 0
+        orange_count = 0
+        for game in self.games:
+            if not game.is_completed():
+                return 1
+            if game.get_winner() == game.get_blue():
+                blue_count += 1
             else:
-                super().set(**kwargs)
+                orange_count += 1
+        if blue_count == self.win_goal:
+            seeding = self.get_seeding()
+            return [seeding[0], seeding[1]]
+        elif orange_count == self.win_goal:
+            seeding = self.get_seeding()
+            return [seeding[1], seeding[0]]
+        else:
+            return 1
 
-    def _update_match_seeding(self):
-        self.F1._update_match_seeding()
-        if self.F1.get('completed'):
-            self.F1._update_result()
-            res = self.F1.get('result')
-            self.F2.set(seeding = res[0:self.F2.get('capacity')])
-            self.F2._update_match_seeding()
+    def is_completed(self):
+        status = self._get_status()
+        if status == 0 or status == 1:
+            return False
+        return True
 
-    def _update_result(self):
+    def get_capacity(self):
+        return 2
 
-        if not self.get('completed'):
+    def get_result(self):
+        status = self._get_status()
+        if status == 0 or status == 1:
             return None
-        res = []
-        high = self.F2.get('result')
-        low = self.F1.get('result')[self.F2.get('capacity'):]
-        res.extend(high)
-        res.extend(low)
-        self.result = res
+        return status
 
+    def __next__(self):
+        if self.is_completed():
+            raise StopIteration
+        for game in self.games:
+            if not game.is_completed():
+                return game
+        game = Game()
+        seeding = self.get_seeding()
+        game.set_blue(seeding[0])
+        game.set_orange(seeding[1])
+        self.games.append(game)
+        return game
 
+    def __repr__(self):
+        if self.is_completed():
+            res = self.get_result()
+            return f'{res[0]} / {res[1]}'
+        if self.is_seeded():
+            seeding = self.get_seeding()
+            return f'{seeding[0]} vs {seeding[1]}'
+        return 'unseeded match'
+
+class Bracket_Reset(Format):
+    def __init__(self, match_length):
+        super().__init__()
+        self.match_length = match_length
+        self.matches = []
+
+    def is_completed(self):
+        n = len(self.matches)
+        if n == 0:
+            return False
+        match = self.matches[-1]
+        if not match.is_completed():
+            return False
+        if n == 1:
+            if match.get_result() == self.get_seeding():
+                return True
+            return False
+        if n == 2:
+            return True
+
+    def get_capacity(self):
+        return 2
+
+    def get_result(self):
+        if self.is_completed():
+            return self.matches[-1].get_result()
+        return None
+
+    def __next__(self):
+        n = len(self.matches)
+        if n == 0:
+            match = Best_Of(self.match_length)
+            match.set_seeding(self.get_seeding())
+            self.matches.append(match)
+            return match.__next__()
+        if n == 1:
+            if not self.matches[0].is_completed():
+                return self.matches[0].__next__()
+            match = Best_Of(self.match_length)
+            match.set_seeding(self.get_seeding())
+            self.matches.append(match)
+            return match.__next__()
+        if n == 2:
+            if not self.matches[1].is_completed():
+                return self.matches[1].__next__()
+            raise StopIteration
 
 
     def __repr__(self):
-        return f'{self.F1.__repr__()} | {self.F2.__repr__()}'
+        if self.is_completed():
+            res = self.get_result()
+            return f'{res[0]} / {res[1]}'
+        return f'Bracket_Reset'
+
+
 
 class Parallel(Format):
-    def __init__(self, F1, F2):
+    def __init__(self, f1, f2):
         super().__init__()
-        self.upper = F1
-        self.lower = F2
-        self.matches = []
-        self.capacity = F1.get('capacity') + F2.get('capacity')
-        for event in [self.upper, self.lower]:
-            self.matches.extend(event.get('matches'))
+        self.f1 = f1
+        self.f2 = f2
 
-    def set(self, **kwargs):
-        for str in kwargs:
-            obj = kwargs[str]
-            if str == 'seeding':
-                seeding = obj
-                us = []
-                ls = []
-                for i, seed in enumerate(seeding):
-                    mod = i % 4
-                    if mod == 0 or mod == 3:
-                        us.append(seed)
-                    else:
-                        ls.append(seed)
-                self.upper.set(seeding = us)
-                self.lower.set(seeding = ls)
-                self.seeding = seeding
+    def set_seeding(self, teams):
+        super().set_seeding(teams)
+        s1 = []
+        s2 = []
+        for i, team in enumerate(teams):
+            if i % 4 == 0 or i % 4 == 3:
+                s1.append(team)
             else:
-                super().set(**kwargs)
+                s2.append(team)
+        self.f1.set_seeding(s1)
+        self.f2.set_seeding(s2)
 
-    def _update_match_seeding(self):
-        for event in [self.upper, self.lower]:
-            event._update_match_seeding()
+    def is_completed(self):
+        return self.f2.is_completed() and self.f1.is_completed()
 
-    def _update_result(self):
-        ur = self.upper.get('result')
-        lr = self.lower.get('result')
-        res = []
-        for u, l in zip(ur, lr):
-            teams = [u, l]
+    def get_capacity(self):
+        return self.f1.get_capacity() + self.f2.get_capacity()
 
-            teams.sort(key = lambda x : self.get('seed', team = x))
-            res.extend(teams)
-        self.result = res
-
-class Trivial(Format):
-    def __init__(self, win_goal = 3):
-        super().__init__()
-        self.matches = [First_To(win_goal = win_goal)]
-        self.capacity = 2
-
-    def _update_match_seeding(self):
-        seeding = self.get('seeding')
-        if seeding == None:
+    def get_result(self):
+        r1 = self.f1.get_result()
+        r2 = self.f2.get_result()
+        if r1 == None or r2 == None:
             return None
-        match = self.get('matches')[0]
-        match.set(orange = seeding[0], blue = seeding[1])
+        i1 = 0
+        i2 = 0
+        res = []
+        for i in range(self.get_capacity()):
+            if i % 4 == 0 or i % 4 == 3:
+                res.append(r1[i1])
+                i1 += 1
+            else:
+                res.append(r2[i2])
+                i2 += 1
+        return res
 
-    def _update_result(self):
-        if not self.get('completed'):
-            return
-        winner = self.get('matches')[0].get('winner')
-        loser = self.get('matches')[0].get('loser')
-        self.result = [winner, loser]
+    def __next__(self):
+        if self.f2.is_completed():
+            raise StopIteration
+        if self.f1.is_completed():
+            return self.f2.__next__()
+        return self.f1.__next__()
+
+    def __repr__(self):
+        return f'[{self.f1} | {self.f2}]'
+
+class Join(Format):
+
+    def __init__(self, f1, f2):
+        super().__init__()
+        self.f1 = f1
+        self.f2 = f2
+
+    def set_seeding(self, seeding):
+        super().set_seeding(seeding)
+        self.f1.set_seeding(seeding)
+
+    def is_completed(self):
+        return self.f2.is_completed()
+
+    def get_capacity(self):
+        return self.f1.get_capacity()
+
+    def get_result(self):
+        if not self.f2.is_completed():
+            return None
+        eliminated = self.f1.get_result()[self.f2.get_capacity():]
+        res = self.f2.get_result()
+        res.extend(eliminated)
+        return res
+
+    def __next__(self):
+        if not self.f1.is_completed():
+            return self.f1.__next__()
+        if not self.f2.is_seeded():
+            print(f'seeding next event: {self.f2}')
+            res = self.f1.get_result()
+            self.f2.set_seeding(res[0:self.f2.get_capacity()])
+        if self.f2.is_completed():
+            raise StopIteration
+        return self.f2.__next__()
+
+    def __repr__(self):
+        return f'{self.f1} -> {self.f2}'
+
+class Permute(Format):
+
+    def __init__(self, ft, permutation):
+        super().__init__()
+        self.permutation = permutation
+        self.ft = ft
+        assert ft.get_capacity() == len(permutation)
+
+    def set_seeding(self, teams):
+        super().set_seeding(teams)
+        self.ft.set_seeding(teams)
+
+    def is_completed(self):
+        return self.ft.is_completed()
+
+    def get_capacity(self):
+        return len(self.permutation)
+
+    def get_result(self):
+        res = self.ft.get_result()
+        if res == None:
+            return None
+        permuted = [0] * len(self.permutation)
+        for team, i in zip(res, self.permutation):
+            permuted[i - 1] = team
+        return permuted
+
+    def __next__(self):
+        return self.ft.__next__()
+
+    def __repr__(self):
+        return f'{self.ft}'
+
+class Over_Seed(Format):
+        def __init__(self, ft, extra_team_count):
+            super().__init__()
+            self.extra_team_count = extra_team_count
+            self.ft = ft
+
+        def set_seeding(self, teams):
+            super().set_seeding(teams)
+            self.ft.set_seeding(teams[self.extra_team_count:])
+
+        def is_completed(self):
+            return self.ft.is_completed()
+
+        def get_capacity(self):
+            return self.ft.get_capacity() + self.extra_team_count
+
+        def get_result(self):
+            lower = self.ft.get_result()
+            if lower == None:
+                return None
+            upper = self.get_seeding()[0:self.extra_team_count]
+            upper.extend(lower)
+            return upper
+
+        def __next__(self):
+            return self.ft.__next__()
+
+        def __repr__(self):
+            return f'{self.ft}'
+            return f'{self.get_seeding()[0:self.extra_team_count]} + {self.ft}'
+
+
 
 class Single_Elim(Join):
-    def __init__(self, round_count = 3, win_goals = [4, 4, 4]):
-        assert isinstance(round_count, int)
-        assert round_count >= 2
-        assert round_count <= 10
+    def __init__(self, round_count, match_lengths):
+        assert len(match_lengths) == round_count
+
         if round_count == 2:
-            upper = Trivial(win_goal = win_goals[0])
-            lower = Trivial(win_goal = win_goals[0])
+            first = match_lengths[0]
+            start = Parallel(Best_Of(first), Best_Of(first))
+            last = match_lengths[1]
+            end = Best_Of(last)
+            super().__init__(start, end)
         else:
-            upper = Single_Elim(round_count - 1, win_goals = win_goals[:-1])
-            lower = Single_Elim(round_count - 1, win_goals = win_goals[:-1])
-        first = Parallel(upper, lower)
-        last = Trivial(win_goal = win_goals[-1])
-        super().__init__(first, last)
+            s1 = Single_Elim(round_count - 1, match_lengths[0:round_count - 1])
+            s2 = Single_Elim(round_count - 1, match_lengths[0:round_count - 1])
+            start = Parallel(s1, s2)
+            end = Best_Of(match_lengths[-1])
+            super().__init__(start, end)
 
-class Double_Final(Format):
-    def __init__(self, win_goal = 4):
-        super().__init__()
-        self.matches = [First_To(win_goal = win_goal) for _ in range(3)]
-        self.capacity = 2
+class Lower_Bracket(Join):
+    def __init__(self, upper_round_count, match_lengths):
+        assert upper_round_count * 2 - 2 == len(match_lengths)
+        if upper_round_count == 2:
+            first = Over_Seed(Best_Of(match_lengths[0]), 1)
+            second = Best_Of(match_lengths[1])
+            super().__init__(first, second)
+        else:
+            l1 = Lower_Bracket(upper_round_count - 1, match_lengths[:2 * upper_round_count - 4])
+            l2 = Lower_Bracket(upper_round_count - 1, match_lengths[:2 * upper_round_count - 4])
+            first = Over_Seed(Parallel(l1, l2), 1)
+            second = Lower_Bracket(2, [match_lengths[-2], match_lengths[-1]])
+            super().__init__(first, second)
 
-
-    def _update_match_seeding(self):
-        seeding = self.get('seeding')
-        if seeding == None:
-            return None
-        matches = self.get('matches')
-        for i, match in enumerate(matches):
-            if i == 0 or i == 1:
-                match.set(blue = seeding[1], orange = seeding[0])
-            if i == 2:
-                first = matches[0]
-                second = matches[1]
-                if first.get('completed') and second.get('completed'):
-                    if first.get('winner') != second.get('winner'):
-                        match.set(blue = seeding[1], orange = seeding[0])
-                    else:
-                        self.matches.pop()
-
-    def _update_result(self):
-        if self.get('completed'):
-            last = self.get('matches')[-1]
-            self.result = [last.get('winner'), last.get('loser')]
+class Spring2122(Join):
+    def __init__(self):
+        upper = Single_Elim(4, [5, 5, 7, 7])
+        lower = Over_Seed(Lower_Bracket(4, [5, 5, 5, 7, 7, 7]), 1)
+        final = Bracket_Reset(7)
+        #permutation = [i + 1 for i in range(16)]
+        permutation = [1, 2, 3, 4, 7, 8, 5, 6, 9, 10, 11, 12, 13, 14, 15, 16]
+        upper_to_lower = Permute(upper, permutation)
+        start = Join(upper_to_lower, lower)
+        super().__init__(start, final)

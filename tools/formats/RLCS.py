@@ -9,3 +9,6 @@ class Fall_2122_Regional(format.Join):
         playoff_start = format.Parallel(playoff1, playoff2)
         playoff = format.Join(playoff_start, final)
         super().__init__(myswiss, playoff)
+
+class Spring_2122_Regional(format.Join):
+    upper = bracket.Single_Elim(team_count = 16, win_goals = [3, 3, 4, 4])

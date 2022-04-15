@@ -42,7 +42,7 @@ def unlog(path):
                 res[file] = data
         else:
             try:
-                next_path = int(next_path)
+                int(next_path)
             except:
                 data = unlog(f'{path}/{next_path}')
                 try:

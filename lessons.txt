@@ -1,0 +1,4 @@
+trueskill:
+
+Q: Is it possible for uncertainty to increase, e.g., after an unexpected upset?
+A: No. Must manually update uncertainty.

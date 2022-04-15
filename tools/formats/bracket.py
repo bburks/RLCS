@@ -90,8 +90,3 @@ class Single_Elim(format.Format):
         round_count = len(self.get('rounds'))
         for i in range(round_count):
             self._seed_round(i)
-
-class RLCS_2122_Playoff(format.Format):
-    def __init__(self, team_count = 8, win_goals = [3, 3, 3]):
-        self.bracket = Single_Elim(team_count = 8, win_goals = [3, 3, 3])
-        self.final = Double_Final()

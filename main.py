@@ -1,30 +1,29 @@
+data_path = '.data/rlcs2122'
+output_path = 'output/rlcs2122'
+from tools.data.requester import summarize_all, load
+from tools.model.rater import make_odds, evaluate, make_first_to_odds, make_observed_odds
+from tools.formats import format
 
-from tools.data.extract_data import pull_rlcs_data
-import tools.formats.format
-from tools.model.rater import Rater
-from tools.model.data_connector import get_all_connected_rlcs_matches
-from tools.model.model import get_region_strengths
-import os
-#pull_rlcs_data(path = '.data')
-
-
-def iterate_ratings():
-    matches = get_all_connected_rlcs_matches(regions = ['INT'])
-    last_dict = dict()
-    for _ in range(1):
-        print(_)
-        model = Rater(ratings = last_dict)
-        model.evaluate(matches)
-        last_dict = model.ratings
+#summarize_all(output_path)
+teams = load(path = output_path, type = 'teams')
+games = load(path = output_path, type = 'games')
+matches = load(path = output_path, type = 'matches')
+events = load(path = output_path, type = 'events')
+international_events = events.loc[events['region'] == 'EU']
+international_event_ids = international_events.index
+international_matches = matches.loc[matches['event'].isin(international_event_ids)]
+international_match_ids = international_matches.index
+international_games = games.loc[games['match'].isin(international_match_ids)]
 
 
-    teams = []
-    for team in model.ratings:
-        teams.append(team)
-
-    teams.sort(key = lambda team : [model.ratings[team].mu])
-
-    for team in teams:
-        print(f"{team.get('name')} - {model.ratings[team].mu} +- {model.ratings[team].sigma}")
-
-get_region_strengths('output/winter_major')
+ratings = evaluate(teams, international_matches, international_games)
+res = make_first_to_odds(teams, ratings, 4, 100)
+res_teams = teams.loc[ratings.index]
+print(res_teams)
+input()
+obs = make_observed_odds(res_teams, teams, international_matches, international_games)
+print(ratings)
+print(res)
+print(obs)
+#print(data)
+#print(data.loc['6020bc70f1e4807cc7002386','region'])
