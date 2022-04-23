@@ -2,11 +2,10 @@ from ..formats import format
 import trueskill
 import pandas as pd
 import math
-import itertools
 from random import random
 
-
-rater = trueskill.TrueSkill(draw_probability = 0, tau = 8.333)
+BETA = 4.166666666666667
+rater = trueskill.TrueSkill(draw_probability = 0, tau = 8.333, beta = BETA)
 
 
 def make_first_to_odds(teams, ratings, first_to, sim_count):
@@ -99,9 +98,6 @@ def make_observed_odds(res_teams, teams, matches, games):
             ratio.loc[name1, name2] = odds
     return ratio
 
-
-
-
 def evaluate(teams, matches, games):
 
     #matches = matches.loc[matches['region'] == 'INT']
@@ -144,12 +140,11 @@ def update_with_new_ratings(ratings, rater, winner, loser):
     ratings.loc[winner, 'games_played'] = ratings.loc[winner, 'games_played'] + 1
     ratings.loc[loser, 'games_played'] = ratings.loc[loser, 'games_played'] + 1
 
-def win_probability(team1, team2):
-    BETA = 4.166666666666667
-    delta_mu = sum(r.mu for r in team1) - sum(r.mu for r in team2)
-    sum_sigma = sum(r.sigma ** 2 for r in itertools.chain(team1, team2))
-    size = len(team1) + len(team2)
-    denom = math.sqrt(size * (BETA * BETA) + sum_sigma)
+def win_probability(t1, t2):
+
+    delta_mu = t1.mu - t2.mu
+    sum_sigma = t1.sigma ** 2 + t2.sigma ** 2
+    denom = math.sqrt(2 * (BETA * BETA) + sum_sigma)
     ts = rater
     return ts.cdf(delta_mu / denom)
 

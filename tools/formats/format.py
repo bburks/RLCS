@@ -12,7 +12,7 @@ class Format(ABC):
         self.seeding = seeding
 
     def is_seeded(self):
-        if self.seeding == None:
+        if self.get_seeding() == None:
             return False
         return True
 
@@ -38,7 +38,7 @@ class Format(ABC):
             else:
                 assert False
 
-    
+
 
 
 
@@ -64,10 +64,10 @@ class Format(ABC):
         pass
 
 class Game:
-    def __init__(self):
-        self.blue = None
-        self.orange = None
-        self.winner = None
+    def __init__(self, blue = None, orange = None, winner = None):
+        self.blue = blue
+        self.orange = orange
+        self.winner = winner
 
     def get_blue(self):
         return self.blue
@@ -366,8 +366,10 @@ class Permute(Format):
         assert ft.get_capacity() == len(permutation)
 
     def set_seeding(self, teams):
-        super().set_seeding(teams)
         self.ft.set_seeding(teams)
+
+    def get_seeding(self):
+        return self.ft.get_seeding()
 
     def is_completed(self):
         return self.ft.is_completed()
